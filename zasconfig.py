@@ -5,20 +5,10 @@ import subprocess,sys,json,collections,argparse
 parser = argparse.ArgumentParser(description="BaiduStreamer")
 parser.add_argument('--mode',default="view")
 parser.add_argument('--reset',dest="mode",action="store_const",const="reset")
-parser.add_argument('path',nargs="?")
+parser.add_argument('--on',dest="mode",action="store_const",const="on")
+parser.add_argument('--levels')
+parser.add_argument('target',nargs="?")
 args = parser.parse_args()
-
-attrs = ["frequent","hourly","daily","weekly","monthly"]
-status = collections.OrderedDict()
-get = ["zfs","list"]
-if args.path:
-  get.append("-r")
-  get.append(args.path)
-proc = subprocess.Popen(get, stdout=subprocess.PIPE).communicate()
-for line in proc[0].decode("utf-8").splitlines():
-  status[line.split()[0]] = ["0","0","0","0","0"]
-  if line.split()[0] == "NAME":
-    status[line.split()[0]] = attrs
 
 
 def view():
@@ -51,9 +41,39 @@ def reset():
           path
         ]).communicate()
 
+def set():
+  i = 0
+  for level in args.levels:
+    level = bool(int(level))
+    key = "com.sun:auto-snapshot:"+attrs[i]+"="+str(level).lower()
+    set = ["zfs","set",key,args.target]
+    proc = subprocess.Popen(set).communicate()
+    i += 1
+
+
+attrs = ["frequent","hourly","daily","weekly","monthly"]
+status = collections.OrderedDict()
+get = ["zfs","list"]
+if args.target:
+  get.append("-r")
+  get.append(args.target)
+
+proc = subprocess.Popen(get, stdout=subprocess.PIPE).communicate()
+for line in proc[0].decode("utf-8").splitlines():
+  status[line.split()[0]] = ["0","0","0","0","0"]
+  if line.split()[0] == "NAME":
+    status[line.split()[0]] = attrs
+
 
 if args.mode == "view":
   view()
 
 if args.mode == "reset":
   reset()
+  view()
+
+if args.mode == "on":
+  if not args.levels:args.levels = "11111"
+  if args.target and len(args.levels) == 5:
+    set()
+    view()
