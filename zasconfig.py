@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import subprocess,sys,json,collections,argparse
 
-parser = argparse.ArgumentParser(description="BaiduStreamer")
+parser = argparse.ArgumentParser(description="ZFS Auto Snapshot Config")
 parser.add_argument('--mode',default="view")
 parser.add_argument('--reset',dest="mode",action="store_const",const="reset")
 parser.add_argument('--on',dest="mode",action="store_const",const="on")
