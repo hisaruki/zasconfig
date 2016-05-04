@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import zasbackup,argparse
+
+parser = argparse.ArgumentParser(description="ZFS Auto Snapshot Auto Backup")
+parser.add_argument('ldn',type=str)
+parser.add_argument('rdn',type=str)
+parser.add_argument('rcommand',type=str)
+args = parser.parse_args()
+
+rcommand = args.rcommand.split()
+
+
+
+l = zasbackup.Local()
+r = zasbackup.Remote(rcommand)
+b = zasbackup.Backup(l,r)
+
+send,recv = b.generate(args.ldn,args.rdn,rcommand)
+if send and recv:print(" ".join(send)+" | "+" ".join(recv))

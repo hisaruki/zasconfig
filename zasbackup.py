@@ -12,7 +12,6 @@ class Local:
         if not name in self.list:self.list[name] = []
         self.list[name].append(key)
 
-
 class Remote:
   def __init__(self,rcommand):
     self.list = {}
@@ -35,9 +34,10 @@ class Backup:
       return False
 
   def generate(self,ldn,rdn,rcommand):
+    send,recv = None,None
     if self.iprop(ldn,rdn):
       self.lkey = list(filter(lambda x:x.find("zfs-auto-snap") != 0,self.local.list[ldn]))[-1]
       send = ["zfs","send","-i",ldn+"@"+self.ikey,ldn+"@"+self.lkey]
       recv = rcommand+["zfs","recv",rdn+"@"+self.lkey]
-      return send,recv
-
+    if self.lkey == self.ikey:send,recv = None,None
+    return send,recv
