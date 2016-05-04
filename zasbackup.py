@@ -3,7 +3,7 @@
 import subprocess
 
 
-class ZASLocal:
+class Local:
   def __init__(self):
     self.list = {}
     for line in subprocess.Popen(["zfs","list","-t","snapshot"], stdout=subprocess.PIPE).communicate()[0].decode("utf-8").splitlines():
@@ -13,7 +13,7 @@ class ZASLocal:
         self.list[name].append(key)
 
 
-class ZASRemote:
+class Remote:
   def __init__(self,rcommand):
     self.list = {}
     for line in subprocess.Popen(rcommand+["zfs","list","-t","snapshot"], stdout=subprocess.PIPE).communicate()[0].decode("utf-8").splitlines():
@@ -41,12 +41,3 @@ class Backup:
       recv = rcommand+["zfs","recv",rdn+"@"+self.lkey]
       return send,recv
 
-l = ZASLocal()
-r = ZASRemote(["sudo","-u","hisaruki","ssh","greed"])
-b = Backup(l,r)
-
-ldn = "pride/ROOT/pride"
-rdn = "da0/backup/pride"
-send,recv = b.generate(ldn,rdn,["sudo","-u","hisaruki","ssh","greed","sudo"])
-
-print(" ".join(send)+" | "+" ".join(recv))
