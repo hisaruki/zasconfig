@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import subprocess,sys,json,collections,argparse
+import subprocess,sys,collections,argparse
 
 parser = argparse.ArgumentParser(description="ZFS Auto Snapshot Config")
 parser.add_argument('--mode',default="view")
