@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import zasbackup,argparse
+import zasbackup,argparse,subprocess
 
 parser = argparse.ArgumentParser(description="ZFS Auto Snapshot Auto Backup")
+parser.add_argument('-a','--autorun',action='store_true')
 parser.add_argument('ldn',type=str)
 parser.add_argument('rdn',type=str)
 parser.add_argument('rcommand',type=str)
@@ -17,4 +18,14 @@ r = zasbackup.Remote(rcommand)
 b = zasbackup.Backup(l,r)
 
 send,recv = b.generate(args.ldn,args.rdn,rcommand)
-if send and recv:print(" ".join(send)+" | "+" ".join(recv))
+
+
+if send and recv:
+  if not args.autorun:print("#dry-run")
+  print(" ".join(send)+" | "+" ".join(recv))
+
+  if args.autorun:
+    p1 = subprocess.Popen(send, stdout=subprocess.PIPE)
+    p2 = subprocess.Popen(recv, stdin=p1.stdout)
+    p1.stdout.close()
+    p2.communicate()
