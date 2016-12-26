@@ -1,56 +1,78 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import subprocess,sys,argparse,re
+import subprocess,argparse,sys,re
 
 parser = argparse.ArgumentParser(description="ZFS Auto Snapshot Incremental Backup")
-parser.add_argument('_from')
-parser.add_argument('_to')
-parser.add_argument('--path')
+parser.add_argument('nfrom')
+parser.add_argument('nto')
+parser.add_argument('--prefrom',nargs="*")
+parser.add_argument('--preto',nargs="*")
 args = parser.parse_args()
 
-def ref(o):
-  result = {}
-  for l in o:
-    l = l.split()
-    if not l[0] == "NAME":
-      path,snapshot = l[0].split("@")
-      path = re.sub("^"+args._from+"/","",path)
-      path = re.sub("^"+args._to+"/","",path)
-      if not path in result:
-        result[path] = []
-      if not re.search("zfs-auto-snap_frequent|zfs-auto-snap_hourly",snapshot):
-        result[path].append(snapshot)
-  return result
+class Zasib:
+  def __init__(self,nfrom,nto,prefrom,preto):
+    self.nfrom = nfrom
+    self.nto = nto
+    self.prefrom = prefrom
+    self.preto = preto
 
-f = subprocess.Popen(["zfs","list","-t","snapshot","-r",args._from], stdout=subprocess.PIPE).communicate()[0].decode("utf-8").splitlines()
-f = ref(f)
-t = subprocess.Popen(["zfs","list","-t","snapshot","-r",args._to], stdout=subprocess.PIPE).communicate()[0].decode("utf-8").splitlines()
-t = ref(t)
-
-for path in f:
-  if path in t:
-    if args.path == path or not args.path:
-      inc = t[path][-1]
-      target = f[path][-1]
-      if inc != target:
-        send = ["sudo","zfs","send","-i",args._from+"/"+path+"@"+inc,args._from+"/"+path+"@"+target]
-        recv = ["sudo","zfs","recv",args._to+"/"+path+"@"+target]
-        print(" ".join(send)+" | "+" ".join(recv))
-        p1 = subprocess.Popen(send, stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(recv, stdin=p1.stdout)
-        p1.stdout.close()
-        p2.communicate()
-
-t = subprocess.Popen(["zfs","list","-t","snapshot","-r",args._to], stdout=subprocess.PIPE).communicate()[0].decode("utf-8").splitlines()
-t = ref(t)
+    listfrom = ["zfs","list","-t","snapshot","-r",self.nfrom]
+    if type(self.prefrom) == list:
+      listfrom = self.prefrom + listfrom
+    listfrom = subprocess.Popen(listfrom,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
 
 
-for path in t:
-  if len(t[path]) > 1 and t[path][0] in f[path] and t[path][-1] in f[path]:
-    proc = ["sudo","zfs","destroy",args._to+"/"+path+"@"+t[path][0]]
-    print(" ".join(proc))
-    subprocess.Popen(proc, stdout=subprocess.PIPE).communicate()[0].decode("utf-8").splitlines()
-    t[path].pop(0)
+    listto = ["zfs","list","-t","snapshot","-r",self.nto]
+    if type(self.preto) == list:
+      listto = self.preto + listto
+    listto = subprocess.Popen(listto,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
+
+    def ref(l):
+      l = filter(lambda x:not x.split()[0] == "NAME",l)
+      l = map(lambda x:x.split()[0],l)
+      l = filter(lambda x:not re.search("@zfs-auto-snap",x),l)
+      l = list(l)
+      return l
+
+    self.listfrom,self.listto = ref(listfrom),ref(listto)
+
+  def send(self):
+    send,recv = None,None
+    if len(self.listto) == 0:
+      send = ["zfs","send","-R",self.listfrom[-1]]
+      if type(self.prefrom) == list:
+        send = self.prefrom + send
+      recv = ["zfs","recv",self.nto]
+      if type(self.preto) == list:
+        recv = self.preto + recv
+    else:
+      tk = self.listto[-1].split("@")[-1]
+      fks = list(map(lambda x:x.split("@")[-1],self.listfrom))
+      fk = fks[fks.index(tk)]
+      if self.nfrom+"@"+fk != self.listfrom[-1]:
+        send = ["zfs","send","-I",self.nfrom+"@"+fk,self.listfrom[-1]]
+        if type(self.prefrom) == list:
+          send = self.prefrom + send
+        recv = ["zfs","recv",self.nto]
+        if type(self.preto) == list:
+          recv = self.preto + recv
+
+    if send and recv:
+      sys.stdout.write(" ".join(send)+" | "+" ".join(recv))
+      p1 = subprocess.Popen(send, stdout=subprocess.PIPE)
+      p2 = subprocess.Popen(recv, stdin=p1.stdout)
+      p1.stdout.close()
+      p2.communicate()
+    else:
+      sys.stdout.write("nothing to do.")
 
 
 
+
+
+
+
+z = Zasib(args.nfrom,args.nto,args.prefrom,args.preto)
+z.send()
+#z.send()
+#./zasib.py pride/test zroot/test --prefrom sudo --preto ssh greed sudo
