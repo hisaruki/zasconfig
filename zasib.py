@@ -1,64 +1,75 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import subprocess,argparse,re,os
+import subprocess,argparse,re,os,datetime
 
 parser = argparse.ArgumentParser(description="ZFS Auto Snapshot Incremental Backup")
-parser.add_argument('nfrom')
-parser.add_argument('nto')
-parser.add_argument('-n','--dry-run',action="store_true")
+parser.add_argument('name_from')
+parser.add_argument('name_to')
+
+parser.add_argument('-a','--all',action="store_true")
+parser.add_argument('-r','--rename',action="store_true")
+parser.add_argument('-s','--send',action="store_true")
 parser.add_argument('-c','--compare',action="store_true")
+
+parser.add_argument('-n','--dry-run',action="store_true")
 parser.add_argument('--prefrom',nargs="*")
 parser.add_argument('--preto',nargs="*")
 args = parser.parse_args()
 
 class Zasib:
-  def __init__(self,nfrom,nto,prefrom,preto,dry_run):
-    self.nfrom = nfrom
-    self.nto = nto
+  def __init__(self,name_from,name_to,prefrom,preto,dry_run):
+    self.name_from = name_from
+    self.name_to = name_to
     self.prefrom = prefrom
     self.preto = preto
     self.dry_run = dry_run
+    self.get()
 
-    listfrom = ["zfs","list","-t","snapshot","-r",self.nfrom]
+  def get(self):
+    list_from = ["zfs","list","-t","snapshot","-r",self.name_from]
     if type(self.prefrom) == list:
-      listfrom = self.prefrom + listfrom
-    listfrom = subprocess.Popen(listfrom,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
+      list_from = self.prefrom + list_from
+    list_from = subprocess.Popen(list_from,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
 
 
-    listto = ["zfs","list","-t","snapshot","-r",self.nto]
+    list_to = ["zfs","list","-t","snapshot","-r",self.name_to]
     if type(self.preto) == list:
-      listto = self.preto + listto
-    listto = subprocess.Popen(listto,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
+      list_to = self.preto + list_to
+    list_to = subprocess.Popen(list_to,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
 
     def ref(l,n):
       l = filter(lambda x:not x.split()[0] == "NAME",l)
       l = map(lambda x:x.split()[0],l)
       l = filter(lambda x:re.search(n+"@",x),l)
-      l = filter(lambda x:not re.search("@zfs-auto-snap",x),l)
       l = list(l)
       return l
 
-    self.listfrom,self.listto = ref(listfrom,nfrom),ref(listto,nto)
+    self.all_from,self.all_to = ref(list_from,self.name_from),ref(list_to,self.name_to)
+    self.list_from = list(filter(lambda x:not re.search("@zfs-auto-snap",x),self.all_from))
+    self.list_to = list(filter(lambda x:not re.search("@zfs-auto-snap",x),self.all_to))
+    self.auto_from = list(filter(lambda x:re.search("@zfs-auto-snap",x),self.all_from))
+    self.auto_to = list(filter(lambda x:re.search("@zfs-auto-snap",x),self.all_to))
 
   def send(self):
+    print("#SEND")
     send,recv = None,None
-    if len(self.listfrom) > 0:
-      if len(self.listto) == 0:
-        send = ["zfs","send","-R",self.listfrom[-1]]
+    if len(self.list_from) > 0:
+      if len(self.list_to) == 0:
+        send = ["zfs","send","-R",self.list_from[-1]]
         if type(self.prefrom) == list:
           send = self.prefrom + send
-        recv = ["zfs","recv",self.nto]
+        recv = ["zfs","recv",self.name_to]
         if type(self.preto) == list:
           recv = self.preto + recv
       else:
-        tk = self.listto[-1].split("@")[-1]
-        fks = list(map(lambda x:x.split("@")[-1],self.listfrom))
+        tk = self.list_to[-1].split("@")[-1]
+        fks = list(map(lambda x:x.split("@")[-1],self.list_from))
         fk = fks[fks.index(tk)]
-        if self.nfrom+"@"+fk != self.listfrom[-1]:
-          send = ["zfs","send","-I",self.nfrom+"@"+fk,self.listfrom[-1]]
+        if self.name_from+"@"+fk != self.list_from[-1]:
+          send = ["zfs","send","-I",self.name_from+"@"+fk,self.list_from[-1]]
           if type(self.prefrom) == list:
             send = self.prefrom + send
-          recv = ["zfs","recv",self.nto]
+          recv = ["zfs","recv",self.name_to]
           if type(self.preto) == list:
             recv = self.preto + recv
 
@@ -76,47 +87,60 @@ class Zasib:
           parent = self.preto + parent
           print(" ".join(parent))
           if not self.dry_run:
-            subprocess.Popen(parent, stdout=subprocess.PIPE)
+            subprocess.Popen(parent, stdout=subprocess.PIPE).communicate()
       print(" ".join(send)+" | "+" ".join(recv))
       if not self.dry_run:
         p1 = subprocess.Popen(send, stdout=subprocess.PIPE)
         p2 = subprocess.Popen(recv, stdin=p1.stdout)
         p1.stdout.close()
         p2.communicate()
-    else:
-      print("nothing to do.")
-  def compare(self):
-    if len(self.listfrom) and len(self.listto):
-      self.keysfrom = list(map(lambda x:re.sub(self.nfrom+"@","",x),self.listfrom))
-      self.keysto = list(map(lambda x:re.sub(self.nto+"@","",x),self.listto))
 
+  def compare(self):
+    print("#COMPARE")
+    if len(self.list_from) and len(self.list_to):
+      self.keys_from = list(map(lambda x:re.sub(self.name_from+"@","",x),self.list_from))
+      self.keys_to = list(map(lambda x:re.sub(self.name_to+"@","",x),self.list_to))
       self.lastbothkey = None
-      for key in self.keysfrom:
-        if key in self.keysto:
+      for key in self.keys_from:
+        if key in self.keys_to:
           self.lastbothkey = key
-      df = filter(lambda x:not re.match(self.nfrom+"@"+self.lastbothkey,x),self.listfrom)
+      df = filter(lambda x:not re.match(self.name_from+"@"+self.lastbothkey,x),self.list_from)
       df = list(df)
-      dt = filter(lambda x:not re.match(self.nto+"@"+self.lastbothkey,x),self.listto)
+      dt = filter(lambda x:not re.match(self.name_to+"@"+self.lastbothkey,x),self.list_to)
       dt = list(dt)
 
-      if len(self.listfrom) > len(df):
+      if len(self.list_from) > len(df):
         for d in df:
           destroy = ["zfs","destroy",d]
           if type(self.prefrom) == list:
             destroy = self.prefrom + destroy
           print(" ".join(destroy))
           if not self.dry_run:
-            subprocess.Popen(destroy, stdout=subprocess.PIPE)
+            subprocess.Popen(destroy, stdout=subprocess.PIPE).communicate()
 
-      if len(self.listto) > len(dt):
+      if len(self.list_to) > len(dt):
         for d in dt:
           destroy = ["zfs","destroy",d]
           if type(self.preto) == list:
             destroy = self.preto + destroy
           print(" ".join(destroy))
           if not self.dry_run:
-            subprocess.Popen(destroy, stdout=subprocess.PIPE)
-
+            subprocess.Popen(destroy, stdout=subprocess.PIPE).communicate()
+  def rename(self):
+    print("#RENAME")
+    if len(self.list_from) < 1 or self.all_from[-1] != self.list_from[-1]:
+      rename = [
+        "zfs",
+        "rename",
+        self.auto_from[-1],
+        self.name_from+"@"+datetime.datetime.now().strftime("%Y%m%d")
+      ]
+      if type(self.prefrom) == list:
+        rename = self.prefrom + rename
+      print(" ".join(rename))
+      if not self.dry_run:
+        subprocess.Popen(rename, stdout=subprocess.PIPE).communicate()
+      self.get()
 
 
 if "ZASIB_PREF" in os.environ:
@@ -128,12 +152,24 @@ if args.prefrom:
 if args.preto:
   preto = args.preto
 
-z = Zasib(args.nfrom,args.nto,prefrom,preto,args.dry_run)
+z = Zasib(args.name_from,args.name_to,prefrom,preto,args.dry_run)
 
-if args.compare:
-  z.compare()
-else:
-  z.send()
+actions = {"r":False,"s":False,"c":False}
+
+actions["r"] = args.rename
+actions["s"] = args.send
+actions["c"] = args.compare
+
+if not True in [x[1] for x in actions.items()]:
+  actions["s"] = True
+
+if args.all:
+  actions["r"],actions["s"],actions["c"] = True,True,True
+
+if actions["r"]:z.rename()
+if actions["s"]:z.send()
+if actions["c"]:z.compare()
+
 
 #./zasib.py pride/ROOT/pride da0/backup/pride -n -c
 
