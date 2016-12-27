@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import subprocess,argparse,sys,re
+import subprocess,argparse,sys,re,os
 
 parser = argparse.ArgumentParser(description="ZFS Auto Snapshot Incremental Backup")
 parser.add_argument('nfrom')
 parser.add_argument('nto')
+parser.add_argument('-n','--dry-run',action="store_true")
 parser.add_argument('--prefrom',nargs="*")
 parser.add_argument('--preto',nargs="*")
 args = parser.parse_args()
@@ -27,14 +28,15 @@ class Zasib:
       listto = self.preto + listto
     listto = subprocess.Popen(listto,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
 
-    def ref(l):
+    def ref(l,n):
       l = filter(lambda x:not x.split()[0] == "NAME",l)
       l = map(lambda x:x.split()[0],l)
+      l = filter(lambda x:re.search(n+"@",x),l)
       l = filter(lambda x:not re.search("@zfs-auto-snap",x),l)
       l = list(l)
       return l
 
-    self.listfrom,self.listto = ref(listfrom),ref(listto)
+    self.listfrom,self.listto = ref(listfrom,nfrom),ref(listto,nto)
 
   def send(self):
     send,recv = None,None
@@ -60,19 +62,28 @@ class Zasib:
 
     if send and recv:
       sys.stdout.write(" ".join(send)+" | "+" ".join(recv))
-      p1 = subprocess.Popen(send, stdout=subprocess.PIPE)
-      p2 = subprocess.Popen(recv, stdin=p1.stdout)
-      p1.stdout.close()
-      p2.communicate()
+
+      if not args.dry_run:
+        p1 = subprocess.Popen(send, stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(recv, stdin=p1.stdout)
+        p1.stdout.close()
+        p2.communicate()
     else:
       sys.stdout.write("nothing to do.")
 
 
 
+if "ZASIB_PREF" in os.environ:
+  prefrom = os.environ["ZASIB_PREF"].split()
+if "ZASIB_PRET" in os.environ:
+  preto = os.environ["ZASIB_PRET"].split()
+if args.prefrom:
+  prefrom = args.prefrom
+if args.preto:
+  preto = args.preto
 
-
-
-
-z = Zasib(args.nfrom,args.nto,args.prefrom,args.preto)
+z = Zasib(args.nfrom,args.nto,prefrom,preto)
 z.send()
-#./zasib.py pride/test zroot/test --prefrom sudo --preto ssh greed sudo
+
+#./zasib.py pride/test ext0/test --prefrom sudo --preto ssh greed sudo
+
