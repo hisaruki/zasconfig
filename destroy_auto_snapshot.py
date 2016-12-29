@@ -17,8 +17,6 @@ def sizeof_fmt(num, suffix='B'):
     num /= 1024.0
   return "%.1f%s%s" % (num, 'Yi', suffix)
 
-
-
 lines = proc[0].decode("utf-8").splitlines()
 lines = map(lambda x:[x.split()[0],x.split()[1]],lines)
 lines = [x for x in lines if re.search(r'zfs-auto-snap',x[0])]

@@ -51,21 +51,24 @@ class Zasib:
     self.auto_to = list(filter(lambda x:re.search("@zfs-auto-snap",x),self.all_to))
 
   def send(self):
-    print("#SEND")
+    rerun = False
     send,recv = None,None
     if len(self.list_from) > 0:
       if len(self.list_to) == 0:
-        send = ["zfs","send","-R",self.list_from[-1]]
+        print("#First Time Sending")
+        send = ["zfs","send",self.list_from[0]]
         if type(self.prefrom) == list:
           send = self.prefrom + send
         recv = ["zfs","recv",self.name_to]
         if type(self.preto) == list:
           recv = self.preto + recv
+        rerun = True
       else:
         tk = self.list_to[-1].split("@")[-1]
         fks = list(map(lambda x:x.split("@")[-1],self.list_from))
         fk = fks[fks.index(tk)]
         if self.name_from+"@"+fk != self.list_from[-1]:
+          print("#Incremental Sending")
           send = ["zfs","send","-I",self.name_from+"@"+fk,self.list_from[-1]]
           if type(self.prefrom) == list:
             send = self.prefrom + send
@@ -94,9 +97,11 @@ class Zasib:
         p2 = subprocess.Popen(recv, stdin=p1.stdout)
         p1.stdout.close()
         p2.communicate()
+      self.get()
+      if rerun:
+        self.send()
 
   def compare(self):
-    print("#COMPARE")
     if len(self.list_from) and len(self.list_to):
       self.keys_from = list(map(lambda x:re.sub(self.name_from+"@","",x),self.list_from))
       self.keys_to = list(map(lambda x:re.sub(self.name_to+"@","",x),self.list_to))
@@ -126,8 +131,8 @@ class Zasib:
           print(" ".join(destroy))
           if not self.dry_run:
             subprocess.Popen(destroy, stdout=subprocess.PIPE).communicate()
+
   def rename(self):
-    print("#RENAME")
     if len(self.list_from) < 1 or self.all_from[-1] != self.list_from[-1]:
       rename = [
         "zfs",
