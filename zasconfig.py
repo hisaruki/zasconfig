@@ -6,6 +6,7 @@ parser = argparse.ArgumentParser(description="ZFS Auto Snapshot Config")
 parser.add_argument('--mode',default="view")
 parser.add_argument('--reset',dest="mode",action="store_const",const="reset")
 parser.add_argument('--on',dest="mode",action="store_const",const="on")
+parser.add_argument('--off',dest="mode",action="store_const",const="off")
 parser.add_argument('--levels')
 parser.add_argument('target',nargs="?")
 args = parser.parse_args()
@@ -75,5 +76,11 @@ if args.mode == "reset":
 if args.mode == "on":
   if not args.levels:args.levels = "11111"
   if args.target and len(args.levels) == 5:
+    set()
+    view()
+
+if args.mode == "off":
+  args.levels = "00000"
+  if args.target:
     set()
     view()

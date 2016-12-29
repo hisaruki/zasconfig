@@ -98,7 +98,7 @@ class Zasib:
         p1.stdout.close()
         p2.communicate()
       self.get()
-      if rerun:
+      if rerun and not self.dry_run:
         self.send()
 
   def compare(self):
@@ -133,20 +133,22 @@ class Zasib:
             subprocess.Popen(destroy, stdout=subprocess.PIPE).communicate()
 
   def rename(self):
-    if len(self.list_from) < 1 or self.all_from[-1] != self.list_from[-1]:
-      rename = [
-        "zfs",
-        "rename",
-        self.auto_from[-1],
-        self.name_from+"@"+datetime.datetime.now().strftime("%Y%m%d")
-      ]
-      if type(self.prefrom) == list:
-        rename = self.prefrom + rename
-      print(" ".join(rename))
-      if not self.dry_run:
-        subprocess.Popen(rename, stdout=subprocess.PIPE).communicate()
-      self.get()
-
+    if len(self.all_from):
+      if len(self.list_from) < 1 or self.all_from[-1] != self.list_from[-1]:
+        newname = self.name_from+"@"+datetime.datetime.now().strftime("%Y%m%d")
+        if not newname in self.all_from:
+          rename = [
+            "zfs",
+            "rename",
+            self.auto_from[-1],
+            self.name_from+"@"+datetime.datetime.now().strftime("%Y%m%d")
+          ]
+          if type(self.prefrom) == list:
+            rename = self.prefrom + rename
+          print(" ".join(rename))
+          if not self.dry_run:
+            subprocess.Popen(rename, stdout=subprocess.PIPE).communicate()
+        self.get()
 
 if "ZASIB_PREF" in os.environ:
   prefrom = os.environ["ZASIB_PREF"].split()
