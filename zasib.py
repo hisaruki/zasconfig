@@ -25,9 +25,6 @@ class Zasib:
     self.dry_run = dry_run
     self.get()
 
-  def zpool_exists(self):
-    return self.name_from.split("/")[0] in self.zpool_from and self.name_to.split("/")[0] in self.zpool_to
-
   def get(self):
     list_from = ["zfs","list","-t","snapshot","-r",self.name_from]
     if type(self.prefrom) == list:
@@ -41,19 +38,15 @@ class Zasib:
     list_to = subprocess.Popen(list_to,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
 
 
-    zpool_from = ["zpool","list"]
+    zfs_root_from = ["zfs","list",self.name_from.split("/")[0]]
     if type(self.prefrom) == list:
-      zpool_from = self.prefrom + zpool_from
-    self.zpool_from = subprocess.Popen(zpool_from,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
-    self.zpool_from.pop(0)
-    self.zpool_from = list(map(lambda x:x.split()[0],self.zpool_from))
+      zfs_root_from = self.prefrom + zfs_root_from
+    self.zfs_root_from = bool(subprocess.Popen(zfs_root_from,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8"))
 
-    zpool_to = ["zpool","list"]
+    zfs_root_to = ["zfs","list",self.name_to.split("/")[0]]
     if type(self.preto) == list:
-      zpool_to = self.preto + zpool_to
-    self.zpool_to = subprocess.Popen(zpool_to,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
-    self.zpool_to.pop(0)
-    self.zpool_to = list(map(lambda x:x.split()[0],self.zpool_to))
+      zfs_root_to = self.preto + zfs_root_to
+    self.zfs_root_to = bool(subprocess.Popen(zfs_root_to,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8"))
 
     def ref(l,n):
       l = filter(lambda x:not x.split()[0] == "NAME",l)
@@ -191,12 +184,12 @@ if not True in [x[1] for x in actions.items()]:
 if args.all:
   actions["r"],actions["s"],actions["c"] = True,True,True
 
-if z.zpool_exists():
+if z.zfs_root_from and z.zfs_root_to:
   if actions["r"]:z.rename()
   if actions["s"]:z.send()
   if actions["c"]:z.compare()
 else:
-  print("#zpool not found.")
+  print("#zfs root not found.")
 
 #./zasib.py pride/ROOT/pride da0/backup/pride -n -c
 
