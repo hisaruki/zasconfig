@@ -25,6 +25,9 @@ class Zasib:
     self.dry_run = dry_run
     self.get()
 
+  def zpool_exists(self):
+    return self.name_from.split("/")[0] in self.zpool_from and self.name_to.split("/")[0] in self.zpool_to
+
   def get(self):
     list_from = ["zfs","list","-t","snapshot","-r",self.name_from]
     if type(self.prefrom) == list:
@@ -36,6 +39,21 @@ class Zasib:
     if type(self.preto) == list:
       list_to = self.preto + list_to
     list_to = subprocess.Popen(list_to,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
+
+
+    zpool_from = ["zpool","list"]
+    if type(self.prefrom) == list:
+      zpool_from = self.prefrom + zpool_from
+    self.zpool_from = subprocess.Popen(zpool_from,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
+    self.zpool_from.pop(0)
+    self.zpool_from = list(map(lambda x:x.split()[0],self.zpool_from))
+
+    zpool_to = ["zpool","list"]
+    if type(self.preto) == list:
+      zpool_to = self.preto + zpool_to
+    self.zpool_to = subprocess.Popen(zpool_to,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8").splitlines()
+    self.zpool_to.pop(0)
+    self.zpool_to = list(map(lambda x:x.split()[0],self.zpool_to))
 
     def ref(l,n):
       l = filter(lambda x:not x.split()[0] == "NAME",l)
@@ -173,10 +191,12 @@ if not True in [x[1] for x in actions.items()]:
 if args.all:
   actions["r"],actions["s"],actions["c"] = True,True,True
 
-if actions["r"]:z.rename()
-if actions["s"]:z.send()
-if actions["c"]:z.compare()
-
+if z.zpool_exists():
+  if actions["r"]:z.rename()
+  if actions["s"]:z.send()
+  if actions["c"]:z.compare()
+else:
+  print("#zpool not found.")
 
 #./zasib.py pride/ROOT/pride da0/backup/pride -n -c
 
