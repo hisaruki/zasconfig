@@ -15,7 +15,7 @@ parser.add_argument('-a', '--all', action="store_true")
 parser.add_argument('-r', '--rename', action="store_true")
 parser.add_argument('-s', '--send', action="store_true")
 parser.add_argument('-c', '--compare', action="store_true")
-parser.add_argument('--revision', type=int, default=3)
+parser.add_argument('--revisions', type=int, default=3)
 parser.add_argument('-n', '--dry-run', action="store_true")
 parser.add_argument('-v', '--verbose', action="store_true")
 
@@ -132,41 +132,29 @@ class Zasib:
                 self.send()
 
     def compare(self):
+        def destroy(key):
+            df = ["zfs", "destroy", self.name_from+'@'+key]
+            if type(self.prefrom) == list:
+                df = self.prefrom + df
+            print(" ".join(df))
+            if not self.dry_run:
+                subprocess.Popen(df, stdout=subprocess.PIPE).communicate()
+
+            dt = ["zfs", "destroy", self.name_to+'@'+key]
+            if type(self.prefrom) == list:
+                dt = self.prefrom + dt
+            print(" ".join(dt))
+            if not self.dry_run:
+                subprocess.Popen(dt, stdout=subprocess.PIPE).communicate()
+
         if len(self.list_from) and len(self.list_to):
             self.keys_from = list(map(lambda x: re.sub(
                 self.name_from + "@", "", x), self.list_from))
             self.keys_to = list(map(lambda x: re.sub(
                 self.name_to + "@", "", x), self.list_to))
-            self.lastbothkey = None
-            for key in self.keys_from:
-                if key in self.keys_to:
-                    self.lastbothkey = key
-            df = filter(lambda x: not re.match(self.name_from +
-                                               "@" + self.lastbothkey, x), self.list_from)
-            df = list(df)
-            dt = filter(lambda x: not re.match(self.name_to +
-                                               "@" + self.lastbothkey, x), self.list_to)
-            dt = list(dt)
-
-            if len(self.list_from) > len(df):
-                for d in df:
-                    destroy = ["zfs", "destroy", d]
-                    if type(self.prefrom) == list:
-                        destroy = self.prefrom + destroy
-                    print(" ".join(destroy))
-                    if not self.dry_run:
-                        subprocess.Popen(
-                            destroy, stdout=subprocess.PIPE).communicate()
-
-            if len(self.list_to) > len(dt):
-                for d in dt:
-                    destroy = ["zfs", "destroy", d]
-                    if type(self.preto) == list:
-                        destroy = self.preto + destroy
-                    print(" ".join(destroy))
-                    if not self.dry_run:
-                        subprocess.Popen(
-                            destroy, stdout=subprocess.PIPE).communicate()
+            keys = list(set(self.keys_from) & set(self.keys_to))
+            while len(keys) > args.revisions:
+                destroy(keys.pop(0))
 
     def rename(self):
         if len(self.all_from):
