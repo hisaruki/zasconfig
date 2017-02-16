@@ -5,6 +5,7 @@ import argparse
 import re
 import os
 import datetime
+from collections import deque
 
 parser = argparse.ArgumentParser(
     description="ZFS Auto Snapshot Incremental Backup")
@@ -15,9 +16,8 @@ parser.add_argument('-a', '--all', action="store_true")
 parser.add_argument('-r', '--rename', action="store_true")
 parser.add_argument('-s', '--send', action="store_true")
 parser.add_argument('-c', '--compare', action="store_true")
-
+parser.add_argument('--revision', type=int, default=3)
 parser.add_argument('-n', '--dry-run', action="store_true")
-
 parser.add_argument('-v', '--verbose', action="store_true")
 
 parser.add_argument('--prefrom', nargs="*")
@@ -150,6 +150,9 @@ class Zasib:
             dt = list(dt)
 
             if len(self.list_from) > len(df):
+                df = deque(df)
+                for i in range(0, args.revision - 1):
+                    df.pop()
                 for d in df:
                     destroy = ["zfs", "destroy", d]
                     if type(self.prefrom) == list:
@@ -160,6 +163,9 @@ class Zasib:
                             destroy, stdout=subprocess.PIPE).communicate()
 
             if len(self.list_to) > len(dt):
+                dt = deque(dt)
+                for i in range(0, args.revision - 1):
+                    dt.pop()
                 for d in dt:
                     destroy = ["zfs", "destroy", d]
                     if type(self.preto) == list:
