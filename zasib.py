@@ -203,7 +203,6 @@ if args.prefrom:
 if args.preto:
     preto = args.preto
 
-args.verbose = True
 if args.verbose:
     print(args.name_from, args.name_to)
 
