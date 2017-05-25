@@ -133,28 +133,33 @@ class Zasib:
 
     def compare(self):
         def destroy(key):
-            df = ["zfs", "destroy", self.name_from+'@'+key]
+            df = ["zfs", "destroy", self.name_from + '@' + key]
             if type(self.prefrom) == list:
                 df = self.prefrom + df
             print(" ".join(df))
             if not self.dry_run:
                 subprocess.Popen(df, stdout=subprocess.PIPE).communicate()
 
-            dt = ["zfs", "destroy", self.name_to+'@'+key]
-            if type(self.prefrom) == list:
-                dt = self.prefrom + dt
+            dt = ["zfs", "destroy", self.name_to + '@' + key]
+            if type(self.preto) == list:
+                dt = self.preto + dt
             print(" ".join(dt))
             if not self.dry_run:
                 subprocess.Popen(dt, stdout=subprocess.PIPE).communicate()
 
         if len(self.list_from) and len(self.list_to):
-            self.keys_from = list(map(lambda x: re.sub(
-                self.name_from + "@", "", x), self.list_from))
-            self.keys_to = list(map(lambda x: re.sub(
-                self.name_to + "@", "", x), self.list_to))
-            keys = list(set(self.keys_from) & set(self.keys_to))
-            while len(keys) > args.revisions:
-                destroy(keys.pop(0))
+            self.keys_from = map(lambda x: re.sub(self.name_from + "@", "", x), self.list_from)
+            self.keys_to = map(lambda x: re.sub(self.name_to + "@", "", x), self.list_to)
+
+            self.keys_from = list(self.keys_from)
+            self.keys_to = list(self.keys_to)
+            rmkeys = []
+
+            for key in filter(lambda x:re.match("^[0-9]+$",x), self.keys_from):
+                if key in self.keys_to and len(self.keys_from) - len(rmkeys) > args.revisions:
+                    rmkeys.append(key)
+            while rmkeys:
+                destroy(rmkeys.pop(0))
 
     def rename(self):
         if len(self.all_from):
