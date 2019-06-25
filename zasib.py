@@ -15,7 +15,7 @@ parser.add_argument('-a', '--all', action="store_true")
 parser.add_argument('-r', '--rename', action="store_true")
 parser.add_argument('-s', '--send', action="store_true")
 parser.add_argument('-c', '--compare', action="store_true")
-parser.add_argument('--revisions', type=int, default=3)
+parser.add_argument('--revisions', type=int, default=5)
 parser.add_argument('-n', '--dry-run', action="store_true")
 parser.add_argument('-v', '--verbose', action="store_true")
 
@@ -69,13 +69,13 @@ class Zasib:
         self.all_from, self.all_to = ref(
             list_from, self.name_from), ref(list_to, self.name_to)
         self.list_from = list(
-            filter(lambda x: not re.search("@zfs-auto-snap", x), self.all_from))
+            filter(lambda x: not re.search("@znap", x), self.all_from))
         self.list_to = list(
-            filter(lambda x: not re.search("@zfs-auto-snap", x), self.all_to))
+            filter(lambda x: not re.search("@znap", x), self.all_to))
         self.auto_from = list(
-            filter(lambda x: re.search("@zfs-auto-snap", x), self.all_from))
+            filter(lambda x: re.search("@znap", x), self.all_from))
         self.auto_to = list(
-            filter(lambda x: re.search("@zfs-auto-snap", x), self.all_to))
+            filter(lambda x: re.search("@znap", x), self.all_to))
 
     def send(self):
         rerun = False

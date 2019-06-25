@@ -24,7 +24,7 @@ def sizeof_fmt(num, suffix='B'):
 
 lines = proc[0].decode("utf-8").splitlines()
 lines = map(lambda x: [x.split()[0], x.split()[1]], lines)
-lines = [x for x in lines if re.search(r'zfs-auto-snap', x[0])]
+lines = [x for x in lines if re.search(r'znap', x[0])]
 if args.target != "all":
     lines = [x for x in lines if re.search("^" + args.target + "@", x[0])]
 lines = list(map(lambda x: [x[0], int(x[1])], lines))
