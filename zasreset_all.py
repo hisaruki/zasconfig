@@ -7,19 +7,22 @@ import re
 
 proc = [
     "zfs",
-    "get",
-    "all"
+    "list"
 ]
 
 o, e = Popen(proc, stdout=PIPE).communicate()
 
-data = [x for x in o.decode().splitlines()]
-data = filter(lambda x:re.search("local", x), data)
-data = filter(lambda x:not re.search("@", x), data)
-data = filter(lambda x:re.search("com.sun:auto-snapshot", x), data)
-data = [x.split() for x in data]
+keys = [
+    "com.sun:auto-snapshot:hourly",
+    "com.sun:auto-snapshot:frequent",
+    "com.sun:auto-snapshot:daily",
+    "com.sun:auto-snapshot:monthly", 
+    "com.sun:auto-snapshot:weekly"
+]
 
-
-for dataset, key, value, source in data:
-    proc = ["zfs", "inherit", key, dataset]
-    Popen(proc).communicate()
+for l in o.decode().splitlines():
+    dataset = l.split()[0]
+    for key in keys:
+        proc = ["zfs", "inherit", key, dataset]
+        sys.stderr.write(" ".join(proc) + "\n")
+        Popen(proc).communicate()

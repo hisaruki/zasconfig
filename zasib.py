@@ -66,29 +66,20 @@ class Zasib:
             l = list(l)
             return l
 
-        self.all_from = ref(list_from, self.name_from)
-        self.all_to = ref(list_to, self.name_to)
-
-        key = re.compile("^" + self.name_from + "@")
-        self.list_from = filter(lambda x: re.search(key, x), self.all_from)
-        self.list_from = filter(lambda x: not re.search("@znap", x), self.list_from)
-        self.list_from = list(self.list_from)
-        self.auto_from = filter(lambda x: re.search(key, x), self.all_from)
-        self.auto_from = filter(lambda x: re.search("@znap", x), self.auto_from)
-        self.auto_from = list(self.auto_from)
-
-        key = re.compile("^" + self.name_to + "@")
-        self.list_to = filter(lambda x: re.search(key, x), self.all_to)
-        self.list_to = filter(lambda x: not re.search("@znap", x), self.list_to)
-        self.list_to = list(self.list_to)
-        self.auto_to = filter(lambda x: re.search(key, x), self.all_to)
-        self.auto_to = filter(lambda x: re.search("@znap", x), self.auto_to)
-        self.auto_to = list(self.auto_to)
+        self.all_from, self.all_to = ref(
+            list_from, self.name_from), ref(list_to, self.name_to)
+        self.list_from = list(
+            filter(lambda x: not re.search("@znap", x), self.all_from))
+        self.list_to = list(
+            filter(lambda x: not re.search("@znap", x), self.all_to))
+        self.auto_from = list(
+            filter(lambda x: re.search("@znap", x), self.all_from))
+        self.auto_to = list(
+            filter(lambda x: re.search("@znap", x), self.all_to))
 
     def send(self):
         rerun = False
         send, recv = None, None
-
         if len(self.list_from) > 0:
             if len(self.list_to) == 0:
                 print("#First Time Sending")
