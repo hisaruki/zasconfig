@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from subprocess import Popen, PIPE
-import sys
+import argparse
 import re
+from subprocess import Popen, PIPE
 
-f_root = sys.argv[1]
-t_root = sys.argv[2]
-commands = sys.argv[3:]
+parser = argparse.ArgumentParser()
+parser.add_argument('fpool')
+parser.add_argument('tpool')
+parser.add_argument('--zasib', default="/home/hisaruki/Public/zasconfig/zasib.py")
+args = parser.parse_args()
 
-keys = []
+o, e = Popen(["zfs", "list", "-r", args.fpool], stdout=PIPE).communicate()
+fdatasets = [x.split()[0] for x in o.decode().splitlines() if x.find("NAME") != 0]
 
-proc = ["zfs", "list", f_root, "-r"]
-o, e = Popen(proc, stdout=PIPE).communicate()
-for l in filter(lambda x:x.find("NAME") < 0, o.decode().splitlines()):
-    key = l.split()[0]
-    keys.append(key)
+#fdatasets = filter(lambda x:x.find("store/Music") == 0, fdatasets)
 
-for f in keys:
-    t = re.sub(re.compile(r'^' + f_root), t_root, f)
-    proc = ["zasib", f, t] + commands
-    print(" ".join(proc))
-    Popen(proc).communicate()
+rk = r'^' + args.fpool
+for fdataset in fdatasets:
+    tdataset = re.sub(rk, args.tpool, fdataset)
+    tdataset = tdataset.split("/")
+    tdataset = "{}/{}".format(tdataset[0], "_".join(tdataset[1:]))
+    Popen([
+        args.zasib,
+        "-a",
+        fdataset,
+        tdataset,
+    ]).communicate()

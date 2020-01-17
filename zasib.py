@@ -1,184 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import subprocess
+from subprocess import Popen, PIPE
 import argparse
+import sys
 import re
 import os
 import datetime
 
 parser = argparse.ArgumentParser(
-    description="ZFS Auto Snapshot Incremental Backup")
-parser.add_argument('name_from')
-parser.add_argument('name_to')
-
+    description="ZFS Auto Snapshot Incremental Backup"
+)
+parser.add_argument('fdataset')
+parser.add_argument('tdataset')
 parser.add_argument('-a', '--all', action="store_true")
 parser.add_argument('-r', '--rename', action="store_true")
 parser.add_argument('-s', '--send', action="store_true")
 parser.add_argument('-c', '--compare', action="store_true")
-parser.add_argument('--revisions', type=int, default=5)
-parser.add_argument('-n', '--dry-run', action="store_true")
-parser.add_argument('-v', '--verbose', action="store_true")
-
-parser.add_argument('--prefrom', nargs="*")
-parser.add_argument('--preto', nargs="*")
+parser.add_argument('--revisions', type=int, default=28)
+parser.add_argument('--prefrom', nargs="*", default=[])
+parser.add_argument('--preto', nargs="*", default=[])
 args = parser.parse_args()
 
-
-class Zasib:
-
-    def __init__(self, name_from, name_to, prefrom, preto, dry_run):
-        self.name_from = name_from
-        self.name_to = name_to
-        self.prefrom = prefrom
-        self.preto = preto
-        self.dry_run = dry_run
-        self.get()
-
-    def get(self):
-        list_from = ["zfs", "list", "-t", "snapshot", "-r", self.name_from]
-        if type(self.prefrom) == list:
-            list_from = self.prefrom + list_from
-        list_from = subprocess.Popen(list_from, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).communicate()[
-            0].decode("utf-8").splitlines()
-
-        list_to = ["zfs", "list", "-t", "snapshot", "-r", self.name_to]
-        if type(self.preto) == list:
-            list_to = self.preto + list_to
-        list_to = subprocess.Popen(list_to, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).communicate()[
-            0].decode("utf-8").splitlines()
-
-        zfs_root_from = ["zfs", "list", self.name_from.split("/")[0]]
-        if type(self.prefrom) == list:
-            zfs_root_from = self.prefrom + zfs_root_from
-        self.zfs_root_from = bool(subprocess.Popen(
-            zfs_root_from, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8"))
-
-        zfs_root_to = ["zfs", "list", self.name_to.split("/")[0]]
-        if type(self.preto) == list:
-            zfs_root_to = self.preto + zfs_root_to
-        self.zfs_root_to = bool(subprocess.Popen(
-            zfs_root_to, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).communicate()[0].decode("utf-8"))
-
-        def ref(l, n):
-            l = filter(lambda x: not x.split()[0] == "NAME", l)
-            l = map(lambda x: x.split()[0], l)
-            l = filter(lambda x: re.search(n + "@", x), l)
-            l = list(l)
-            return l
-
-        self.all_from, self.all_to = ref(
-            list_from, self.name_from), ref(list_to, self.name_to)
-        self.list_from = list(
-            filter(lambda x: not re.search("@znap", x), self.all_from))
-        self.list_to = list(
-            filter(lambda x: not re.search("@znap", x), self.all_to))
-        self.auto_from = list(
-            filter(lambda x: re.search("@znap", x), self.all_from))
-        self.auto_to = list(
-            filter(lambda x: re.search("@znap", x), self.all_to))
-
-    def send(self):
-        rerun = False
-        send, recv = None, None
-        if len(self.list_from) > 0:
-            if len(self.list_to) == 0:
-                print("#First Time Sending")
-                send = ["zfs", "send", self.list_from[0]]
-                if type(self.prefrom) == list:
-                    send = self.prefrom + send
-                recv = ["zfs", "recv", self.name_to]
-                if type(self.preto) == list:
-                    recv = self.preto + recv
-                rerun = True
-            else:
-                tk = self.list_to[-1].split("@")[-1]
-                fks = list(map(lambda x: x.split("@")[-1], self.list_from))
-                fk = fks[fks.index(tk)]
-                if self.name_from + "@" + fk != self.list_from[-1]:
-                    print("#Incremental Sending")
-                    send = ["zfs", "send", "-I", self.name_from +
-                            "@" + fk, self.list_from[-1]]
-                    if type(self.prefrom) == list:
-                        send = self.prefrom + send
-                    recv = ["zfs", "recv", self.name_to]
-                    if type(self.preto) == list:
-                        recv = self.preto + recv
-
-        if send and recv:
-            parent = ["zfs", "list", recv[-1]]
-            if type(self.preto) == list:
-                parent = self.preto + parent
-            parent = subprocess.Popen(parent, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).communicate()[
-                0].decode("utf-8").splitlines()
-            if len(parent) == 0:
-                parent = recv[-1].split("/")
-                parent.pop()
-                parent = "/".join(parent)
-                parent = ["zfs", "create", "-p", parent]
-                if type(self.preto) == list:
-                    parent = self.preto + parent
-                    print(" ".join(parent))
-                    if not self.dry_run:
-                        subprocess.Popen(
-                            parent, stdout=subprocess.PIPE).communicate()
-            print(" ".join(send) + " | " + " ".join(recv))
-            if not self.dry_run:
-                p1 = subprocess.Popen(send, stdout=subprocess.PIPE)
-                p2 = subprocess.Popen(recv, stdin=p1.stdout)
-                p1.stdout.close()
-                p2.communicate()
-            self.get()
-            if rerun and not self.dry_run:
-                self.send()
-
-    def compare(self):
-        def destroy(key):
-            df = ["zfs", "destroy", self.name_from + '@' + key]
-            if type(self.prefrom) == list:
-                df = self.prefrom + df
-            print(" ".join(df))
-            if not self.dry_run:
-                subprocess.Popen(df, stdout=subprocess.PIPE).communicate()
-
-            dt = ["zfs", "destroy", self.name_to + '@' + key]
-            if type(self.preto) == list:
-                dt = self.preto + dt
-            print(" ".join(dt))
-            if not self.dry_run:
-                subprocess.Popen(dt, stdout=subprocess.PIPE).communicate()
-
-        if len(self.list_from) and len(self.list_to):
-            self.keys_from = map(lambda x: re.sub(self.name_from + "@", "", x), self.list_from)
-            self.keys_to = map(lambda x: re.sub(self.name_to + "@", "", x), self.list_to)
-
-            self.keys_from = list(self.keys_from)
-            self.keys_to = list(self.keys_to)
-            rmkeys = []
-
-            for key in filter(lambda x:re.match("^[0-9]+$",x), self.keys_from):
-                if key in self.keys_to and len(self.keys_from) - len(rmkeys) > args.revisions:
-                    rmkeys.append(key)
-            while rmkeys:
-                destroy(rmkeys.pop(0))
-
-    def rename(self):
-        if len(self.all_from):
-            if len(self.list_from) < 1 or self.all_from[-1] != self.list_from[-1]:
-                newname = self.name_from + "@" + datetime.datetime.now().strftime("%Y%m%d")
-                if newname not in self.all_from:
-                    rename = [
-                        "zfs",
-                        "rename",
-                        self.auto_from[-1],
-                        self.name_from + "@" + datetime.datetime.now().strftime("%Y%m%d")
-                    ]
-                    if type(self.prefrom) == list:
-                        rename = self.prefrom + rename
-                    print(" ".join(rename))
-                    if not self.dry_run:
-                        subprocess.Popen(
-                            rename, stdout=subprocess.PIPE).communicate()
-                self.get()
 
 if "ZASIB_PREF" in os.environ:
     prefrom = os.environ["ZASIB_PREF"].split()
@@ -188,30 +30,163 @@ if args.prefrom:
     prefrom = args.prefrom
 if args.preto:
     preto = args.preto
-
-if args.verbose:
-    print(args.name_from, args.name_to)
-
-z = Zasib(args.name_from, args.name_to, prefrom, preto, args.dry_run)
-
-actions = {"r": False, "s": False, "c": False}
-
-actions["r"] = args.rename
-actions["s"] = args.send
-actions["c"] = args.compare
-
-if True not in [x[1] for x in actions.items()]:
-    actions["s"] = True
-
 if args.all:
-    actions["r"], actions["s"], actions["c"] = True, True, True
+    args.rename, args.send, args.compare = True, True, True
 
-if z.zfs_root_from and z.zfs_root_to:
-    if actions["r"]:
-        z.rename()
-    if actions["s"]:
-        z.send()
-    if actions["c"]:
-        z.compare()
-else:
-    print("#zfs root not found.")
+class Snapshot:
+    def __init__(self, l, dataset):
+        self.dataset = dataset
+        l = l.split()
+        self.name = l[0]
+        self.name = self.name.split("@")[-1]
+        self.fullname = self.dataset.name + "@" + self.name
+        self.used = l[1]
+        self.avail = l[2]
+        self.refer = l[3]
+        self.mountpoint = l[4]
+
+    def rename(self, newname=None):
+        if newname is None:
+            newname = re.sub(r'[^0-9]', '', self.name)[0:8]
+        newfullname = "{}@{}".format(self.dataset.name, newname)
+
+        if not self.dataset.search_snapshot(newname):
+            sys.stderr.write("# {} => {}\n".format(self.fullname, newfullname))
+            proc = [
+                "zfs",
+                "rename",
+                self.fullname,
+                newname
+            ]
+            proc = self.dataset.prefix + proc
+            sys.stderr.write(" ".join(proc) + "\n")
+            Popen(proc).communicate()
+            self.dataset.create_status()
+    def destroy(self):
+        proc = [
+            "zfs",
+            "destroy",
+            self.fullname
+        ]
+        proc = self.dataset.prefix + proc
+        sys.stderr.write(" ".join(proc) + "\n")
+        Popen(proc).communicate()
+        self.dataset.create_status()
+
+class Zfs:
+    def __init__(self, datasetname):
+        self.name = datasetname
+        self._snapshots = []
+        self.prefix = []
+        self.create_status()
+
+    def create_status(self):
+        proc = ["zfs", "list", self.name, "-t", "snapshot"]
+        o, e = Popen(proc, stdout=PIPE, stderr=PIPE).communicate()
+        self.exists = True
+        if e:
+            self.exists = False
+        for l in o.decode().splitlines():
+            if l.find("NAME") == 0:
+                continue
+            snapshot = Snapshot(l, self)
+            self._snapshots.append(snapshot)
+
+    def _filter_snapshots(self, mode):
+        f = self._snapshots
+        if mode == "znap":
+            f = filter(lambda x:x.name.find("znap") >= 0, self._snapshots)
+        if mode == "static":
+            f = filter(lambda x:x.name.find("znap") == -1, self._snapshots)
+        f = list(f)
+        return f
+
+    def snapshot(self, eq, mode="all"):
+        f = self._filter_snapshots(mode)
+        if len(f):
+            return f[eq]
+    
+    def snapshots(self, mode="all"):
+        f = self._filter_snapshots(mode)
+        return f
+
+    def search_snapshot(self, text):
+        res = [x for x in self._snapshots if x.name == text]
+        if len(res):
+            return res[0]
+        else:
+            return False
+
+    def send(self, dataset1, dataset2=None):
+        proc = ["zfs", "send", dataset1.fullname]
+        if dataset2:
+            proc = ["zfs", "send", "-I", dataset1.fullname, dataset2.fullname]
+        proc = self.prefix + proc
+        class Exec:
+            def __init__(self, proc):
+                self.proc = proc
+        return Exec(proc)
+
+    def recv(self):
+        proc = ["zfs", "recv", self.name]
+        proc = self.prefix + proc
+        class Exec:
+            def __init__(self, proc):
+                self.proc = proc
+        return Exec(proc)
+
+if __name__ == '__main__':
+    f = Zfs(args.fdataset)
+    f.prefix = prefrom
+    if f.exists is False:
+        sys.stderr.write("dataset {} does not exist.\n".format(f.name))
+        sys.exit(1)
+    t = Zfs(args.tdataset)
+    t.prefix = preto
+
+    if args.rename:
+        r = f.snapshot(-1, "znap")
+        if r:
+            r.rename()
+
+    if args.send:
+        if not t.exists:
+            sys.stderr.write("#First time sending...\n")
+            send = f.send(f.snapshot(0, "static"))
+            recv = t.recv()
+            l = "{} | {}\n".format(" ".join(send.proc), " ".join(recv.proc))
+            sys.stderr.write(l)
+            send = Popen(send.proc, stdout=PIPE)
+            recv = Popen(recv.proc, stdin=send.stdout)
+            recv.communicate()
+            f.create_status()
+            t.create_status()
+        istart = t.snapshot(-1, "static").name
+        istart = f.search_snapshot(istart)
+        iend = f.snapshot(-1, "static")
+        if istart and iend:
+            if istart.name != iend.name:
+                sys.stderr.write("#Incrimental sending...\n")
+                send = f.send(istart, iend)
+                recv = t.recv()
+                l = "{} | {}\n".format(" ".join(send.proc), " ".join(recv.proc))
+                sys.stderr.write(l)
+
+                send = Popen(send.proc, stdout=PIPE)
+                recv = Popen(recv.proc, stdin=send.stdout)
+                recv.communicate()
+                f.create_status()
+                t.create_status()
+
+    if args.compare:
+        fa = set([x.name for x in f.snapshots("static")])
+        ta = set([x.name for x in t.snapshots("static")])
+        target = list(fa and ta)
+        target.sort()
+        while len(target) > args.revisions:
+            target.pop(0)
+        target = set(target)
+       
+        for x in f.snapshots("static") + t.snapshots("static"):
+            if x.name not in target:
+                x.destroy()
