@@ -8,6 +8,7 @@ import argparse
 parser = argparse.ArgumentParser(description="Destroy Auto Snapshot")
 parser.add_argument('target')
 parser.add_argument('--autokey', default="znap")
+parser.add_argument('--left', default=0, type=int)
 parser.add_argument("-r", '--recursive', action="store_true")
 args = parser.parse_args()
 
@@ -34,9 +35,14 @@ lines = o.decode().splitlines()
 f = filter(lambda x:re.search("@", x), lines)
 f = filter(lambda x:re.search(args.autokey, x), f)
 data = [(line.split()[0], int(line.split()[1]))for line in f]
+while len(data) - len(data) > args.left:
+    data.pop(0)
+
 for _name, size in data:
     sys.stdout.write("{}\t{}\n".format(_name, size))
+
 total = fmt(sum([x[1] for x in data]))
+
 sys.stdout.write("{} free space will be available.\n".format(total))
 sys.stdout.write("Do you want to continue [y/N]?")
 if re.match("y", input().lower()):
